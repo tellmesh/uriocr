@@ -1,3 +1,9 @@
+from __future__ import annotations
+
+from importlib.resources import files
+
+from urisysedge.manifest import register_manifest_file
+
+
 def register(runtime):
-    runtime.register('ocr://{host}/image/latest/query/text', 'python://uriocr.handlers:latest_text', kind='query', operation='ocr.latest.text')
-    runtime.register('ocr://{host}/image/{image_id}/query/text', 'python://uriocr.handlers:image_text', kind='query', operation='ocr.image.text')
+    register_manifest_file(runtime, files(__package__).joinpath("manifest.yaml"))

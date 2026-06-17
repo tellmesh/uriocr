@@ -1,3 +1,78 @@
+# UriPack: uriocr
+
+Self-contained Markpact — definitions, full source, run config. Unpack & run: `urisys markpact run uriocr/uriocr.markpact.md --as service` (writes `.markpact/`).
+
+```yaml markpact:pack
+apiVersion: urisys.io/v1
+kind: UriPack
+metadata:
+  id: uriocr-pack
+  version: 1.0.0
+  language: python
+description: OCR text extraction from latest screenshot or image id (mock/tesseract).
+schemes:
+- ocr
+capabilities:
+- id: ocr.latest.text
+  uri: ocr://{host}/image/latest/query/text
+  kind: query
+  operation: ocr.latest.text
+  handler: python://uriocr.handlers:latest_text
+  side_effects: false
+  approval: not_required
+- id: ocr.image.text
+  uri: ocr://{host}/image/{image_id}/query/text
+  kind: query
+  operation: ocr.image.text
+  handler: python://uriocr.handlers:image_text
+  side_effects: false
+  approval: not_required
+policy:
+  default: deny_mutations_without_approval
+runtime:
+  default_environment: mock
+  supports:
+  - mock
+  - local
+  - docker
+```
+
+```yaml markpact:run
+modes:
+- pack
+- service
+- flow
+- interface
+- adapter
+default: service
+scheme: ocr
+service:
+  port: 8790
+  wire: POST /uri/call
+flow:
+  ids:
+  - gui-open-software-center
+  - llm-guided-gui-click
+adapter:
+  wire: POST /uri/call
+  events: GET /events
+```
+
+```python markpact:module path=uriocr/__init__.py
+from __future__ import annotations
+
+from importlib.resources import files
+
+from .routes import register
+
+__all__ = ["register", "manifest_path"]
+
+
+def manifest_path():
+    return files(__package__).joinpath("manifest.yaml")
+```
+
+```python markpact:module path=uriocr/handlers.py
 from __future__ import annotations
 
 import base64
@@ -115,3 +190,61 @@ def image_text(payload, context):
     image_id = context.get('params', {}).get('image_id')
     data = _extract_text(context)
     return {'image_id': image_id, **data}
+```
+
+```python markpact:module path=uriocr/routes.py
+from __future__ import annotations
+
+from importlib.resources import files
+
+from urisysedge.manifest import register_manifest_file
+
+
+def register(runtime):
+    register_manifest_file(runtime, files(__package__).joinpath("manifest.yaml"))
+```
+
+```yaml markpact:flow id=gui-open-software-center
+flow:
+  id: gui-open-software-center
+  description: Open Software Center via keyboard and click Updates (desktop GUI / HIM + KVM).
+
+defaults:
+  approved: true
+  dry_run: true
+
+do:
+  - him://local/keyboard/command/hotkey:
+      keys: ["super"]
+  - him://local/keyboard/command/type-text:
+      text: Software
+  - him://local/keyboard/command/key:
+      key: Return
+  - kvm://local/monitor/primary/query/screenshot
+  - ocr://local/image/latest/query/text
+  - kvm://local/task/command/click-text:
+      text: Updates
+```
+
+```yaml markpact:flow id=llm-guided-gui-click
+flow:
+  id: llm-guided-gui-click
+  description: Screenshot, OCR, LLM vision analyze, then click Install (KVM + OCR + LLM).
+
+defaults:
+  approved: true
+  dry_run: true
+
+do:
+  - kvm://local/monitor/primary/query/screenshot
+  - ocr://local/image/latest/query/text
+  - llm://local/vision/query/analyze:
+      target_text: Install
+  - kvm://local/task/command/click-text:
+      text: Install
+```
+
+```markdown markpact:docs
+# uriocr
+```
+
