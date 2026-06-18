@@ -28,8 +28,20 @@ def _latest_screenshot(context):
     return context.get('state', {}).get('latest_screenshot') or {}
 
 
-def _png_bytes(context):
-    shot = _latest_screenshot(context)
+def _screenshot_for_id(context, image_id):
+    if not image_id or image_id == 'latest':
+        return _latest_screenshot(context)
+    images = context.get('state', {}).get('images') or {}
+    if image_id in images:
+        return images[image_id]
+    latest = _latest_screenshot(context)
+    if latest.get('image_id') == image_id:
+        return latest
+    return {}
+
+
+def _png_bytes(context, image_id=None):
+    shot = _screenshot_for_id(context, image_id)
     raw = base64.b64decode(shot.get('base64') or '')
     if shot.get('mime') == 'image/png' and raw:
         return raw
@@ -91,10 +103,10 @@ def _merge_word_boxes(boxes):
     return merged
 
 
-def _extract_text(context):
+def _extract_text(context, image_id=None):
     driver = _driver(context)
     if driver == 'tesseract':
-        png = _png_bytes(context)
+        png = _png_bytes(context, image_id=image_id)
         if not png:
             raise RuntimeError('tesseract OCR requires a PNG screenshot in state.latest_screenshot')
         lang = _ocr_cfg(context).get('lang', 'eng')
@@ -113,5 +125,5 @@ def latest_text(payload, context):
 
 def image_text(payload, context):
     image_id = context.get('params', {}).get('image_id')
-    data = _extract_text(context)
-    return {'image_id': image_id, **data}
+    data = _extract_text(context, image_id=image_id)
+    return {'image_id': image_id or 'latest', **data}
